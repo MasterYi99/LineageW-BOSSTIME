@@ -5,10 +5,18 @@ import json
 import sqlite3
 import re
 
-st.set_page_config(page_title="天堂W 盟用王表 (一鍵秒報版)", layout="wide")
+st.set_page_config(page_title="天堂W 盟用王表 (時區修正版)", layout="wide")
 st.title("🏰 《天堂W》王表管理系統")
 
 DB_FILE = "boss.db"
+
+# -------------------------------------------------------------------------
+# 🛠 輔助函數：強制取得台灣時間 (台北時區 UTC+8)
+# -------------------------------------------------------------------------
+def get_tw_now():
+    """無視雲端伺服器在哪裡，強制取得精準的台灣當下時間"""
+    # 雲端伺服器通常是 UTC 時間，台灣時間 = UTC + 8 小時
+    return datetime.utcnow() + timedelta(hours=8)
 
 # -------------------------------------------------------------------------
 # 1. 資料庫基礎建設
@@ -50,7 +58,25 @@ def init_db():
     if cursor.fetchone()[0] == 0:
         raw_boss_json = """
         [
-
+          {"TIME": "30", "CONTENT": "[古魯丁地監第5層][托魯克]已重生", "NAME": "托魯克"},
+          {"TIME": "30", "CONTENT": "[古魯丁地監第7層][卡修阿特]已重生", "NAME": "卡修阿特"},
+          {"TIME": "30", "CONTENT": "[徘徊者之地][亡命之徒]已重生", "NAME": "亡命之徒"},
+          {"TIME": "30", "CONTENT": "[徘徊者之地][亡命之徒]已重生", "NAME": "亡命"},
+          {"TIME": "30", "CONTENT": "[淨化大地][咒術師斯科特]已重生", "NAME": "咒術師斯科特"},
+          {"TIME": "30", "CONTENT": "[淨化大地][咒術師斯科特]已重生", "NAME": "斯科特"},
+          {"TIME": "30", "CONTENT": "[說話之島][佩迪卡]已重生", "NAME": "佩迪卡"},
+          {"TIME": "30", "CONTENT": "[說話之島][克頓阿托魯]已重生", "NAME": "克頓阿托魯"},
+          {"TIME": "30", "CONTENT": "[說話之島][克頓阿托魯]已重生", "NAME": "克頓"},
+          {"TIME": "30", "CONTENT": "[說話之島][哭臉]已重生", "NAME": "哭臉"},
+          {"TIME": "30", "CONTENT": "[說話之島][巴魯德拉克]已重生", "NAME": "巴魯德拉克"},
+          {"TIME": "30", "CONTENT": "[說話之島][巴魯德拉克]已重生", "NAME": "巴魯"},
+          {"TIME": "30", "CONTENT": "[說話之島][斯卡魯斯]已重生", "NAME": "斯卡"},
+          {"TIME": "30", "CONTENT": "[說話之島][斯卡魯斯]已重生", "NAME": "斯卡魯斯"},
+          {"TIME": "30", "CONTENT": "[說話之島][流口水的齊戈爾]已重生", "NAME": "齊戈爾"},
+          {"TIME": "30", "CONTENT": "[說話之島][流口水的齊戈爾]已重生", "NAME": "流口水的齊戈爾"},
+          {"TIME": "30", "CONTENT": "[說話之島地監第2層][黑鋼]已重生", "NAME": "黑鋼"},
+          {"TIME": "30", "CONTENT": "[黑戰艦第2層][沒落的德佩托]已重生", "NAME": "沒落的德佩托"},
+          {"TIME": "30", "CONTENT": "[黑戰艦第2層][沒落的德佩托]已重生", "NAME": "德佩托"},
           {"TIME": "120", "CONTENT": "[亞丁城堡監獄第1層][黑蛇騎士團麥肯]已重生", "NAME": "麥"},
           {"TIME": "120", "CONTENT": "[亞丁城堡監獄第1層][黑蛇騎士團麥肯]已重生", "NAME": "麥肯"},
           {"TIME": "120", "CONTENT": "[亞丁農場][黑虎恰姆帕瓦特]已重生", "NAME": "黑虎"},
@@ -79,7 +105,7 @@ def init_db():
           {"TIME": "120", "CONTENT": "[龍之谷][四區飛龍]已重生", "NAME": "4"},
           {"TIME": "120", "CONTENT": "[龍之谷][四區飛龍]已重生", "NAME": "飛龍4"},
           {"TIME": "180", "CONTENT": "[說話之島地監第1層][獻上祭品的庫約]已重生", "NAME": "庫約"},
-          {"TIME": "480", "CONTENT": "[古魯丁地監第6層][克洛林]已重生", "NAME": "克洛林"},
+          {"TIME": "240", "CONTENT": "[古魯丁地監第6層][克洛林]已重生", "NAME": "克洛林"},
           {"TIME": "240", "CONTENT": "[妖魔森林][奈克偌斯]已重生", "NAME": "奈克"},
           {"TIME": "240", "CONTENT": "[妖魔森林][奈克偌斯]已重生", "NAME": "N"},
           {"TIME": "240", "CONTENT": "[妖魔森林][奈克偌斯]已重生", "NAME": "奈克偌斯"},
@@ -101,7 +127,7 @@ def init_db():
           {"TIME": "240", "CONTENT": "[遺忘的春之庭院][審判者拉馬修]已重生", "NAME": "審判者"},
           {"TIME": "240", "CONTENT": "[霧月島][史前巨鱷]已重生", "NAME": "史前巨鱷"},
           {"TIME": "240", "CONTENT": "[霧月島][史前巨鱷]已重生", "NAME": "巨鱷"},
-          {"TIME": "720", "CONTENT": "[古魯丁地監三四樓][四色]已重生", "NAME": "四色"},
+          {"TIME": "360", "CONTENT": "[古魯丁地監三四樓][四色]已重生", "NAME": "四色"},
           {"TIME": "360", "CONTENT": "[峽谷支配者][二巨]已重生", "NAME": "巨"},
           {"TIME": "360", "CONTENT": "[峽谷支配者][二巨]已重生", "NAME": "二巨"},
           {"TIME": "360", "CONTENT": "[峽谷支配者][二巨]已重生", "NAME": "吞噬岩石的戈爾森"},
@@ -183,12 +209,11 @@ else:
     time_multiplier = 1.0
 
 # -------------------------------------------------------------------------
-# 3. 側邊欄擊殺回報功能 (新增：當下擊殺秒報按鈕)
+# 3. 側邊欄擊殺回報功能
 # -------------------------------------------------------------------------
 st.sidebar.header("⚔️ 擊殺回報")
 boss_df = get_all_bosses_from_db()
 
-# 建立別名檢索對照表
 search_options = {}
 for idx, row in boss_df.iterrows():
     aliases_list = row['aliases'].split(",")
@@ -208,14 +233,13 @@ selected_option = st.sidebar.selectbox(
     placeholder="輸入簡稱，如: 飛龍、1、蟻后"
 )
 
-# 只有當玩家真正選了某隻王時，才顯示回報介面
 if selected_option != "":
     target_info = search_options[selected_option]
     st.sidebar.markdown(f"**🎯 已選王怪：** `{target_info['real_name']}`")
     
-    # ⚡ 核心功能 1：當下擊殺秒報按鈕（使用亮紅色按鈕凸顯）
+    # 【一鍵秒報現在時間】 -> 修正：全面改用 get_tw_now() 抓台北時間
     if st.sidebar.button("⏱️ 剛打完！一鍵回報現在時間", use_container_width=True, type="primary"):
-        kill_datetime = datetime.now()
+        kill_datetime = get_tw_now()
         next_datetime = kill_datetime + timedelta(minutes=int(target_info["cd_minutes"]))
         
         str_kill = kill_datetime.strftime("%Y-%m-%d %H:%M")
@@ -228,45 +252,44 @@ if selected_option != "":
     st.sidebar.markdown("<hr style='margin:10px 0; border-top:1px dashed #ccc;'>", unsafe_allow_html=True)
     st.sidebar.write("✍️ 補登記其他時間：")
     
-    # ⚡ 核心功能 2：手動自行打字輸入時間
-    time_input_raw = st.sidebar.text_input("輸入時間 (例如 1001 或 2331)", value="")
+    time_input_raw = st.sidebar.text_input("輸入時間 (例如 0123 或 2331)", value="")
     
-    if st.sidebar.button("确认手動登記", use_container_width=True):
-        now_dt = datetime.now()
-        parsed_time = None
+    if st.sidebar.button("確認手動登記", use_container_width=True):
+        tw_now = get_tw_now() # ✨ 改用台灣時間作為對照基準
+        parsed_datetime = None
         input_clean = time_input_raw.strip()
         
         if input_clean == "":
-            st.sidebar.error("❌ 手動登記請輸入時間數字（如 1001）！若剛打完請直接點上方秒報按鈕。")
+            st.sidebar.error("❌ 手動登記請輸入時間數字！")
         elif re.match(r"^\d{3,4}$", input_clean):
             if len(input_clean) == 3:
                 input_clean = "0" + input_clean
             
-            hour = int(input_clean[0:2])
-            minute = int(input_clean[2:4])
+            hour_val = int(input_clean[0:2])
+            min_val = int(input_clean[2:4])
             
-            if 0 <= hour < 24 and 0 <= minute < 60:
-                parsed_time = datetime.now().replace(hour=hour, minute=minute, second=0, microsecond=0).time()
+            if 0 <= hour_val < 24 and 0 <= min_val < 60:
+                # ✨ 終極安全時間組合法：直接用當天的年月手動拼字，完全繞過帶有時區陷阱的 .replace()
+                today_str = tw_now.strftime("%Y-%m-%d")
+                parsed_datetime = datetime.strptime(f"{today_str} {hour_val:02d}:{min_val:02d}", "%Y-%m-%d %H:%M")
             else:
                 st.sidebar.error("❌ 時間錯誤：小時 00~23，分鐘 00~59 之間！")
         else:
-            st.sidebar.error("❌ 格式錯誤！請輸入 4 位純數字如 `1001`。")
+            st.sidebar.error("❌ 格式錯誤！請輸入 4 位純數字如 `0123`。")
             
-        if parsed_time:
-            today = now_dt.date()
-            kill_datetime = datetime.combine(today, parsed_time)
-            
-            # 寬容版跨夜防呆：只有當輸入的時間比現在還未來超過 6 小時以上，才認定是昨晚跨夜的王
-            if kill_datetime > now_dt + timedelta(hours=6):
-                kill_datetime = kill_datetime - timedelta(days=1)
+        if parsed_datetime:
+            # ✨ 修正後的寬容版跨夜防呆邏輯
+            # 如果輸入的時間比現在的台灣時間還超前 6 小時以上，才認定是昨天跨夜的王
+            if parsed_datetime > tw_now + timedelta(hours=6):
+                parsed_datetime = parsed_datetime - timedelta(days=1)
                 
-            next_datetime = kill_datetime + timedelta(minutes=int(target_info["cd_minutes"]))
+            next_datetime = parsed_datetime + timedelta(minutes=int(target_info["cd_minutes"]))
             
-            str_kill = kill_datetime.strftime("%Y-%m-%d %H:%M")
+            str_kill = parsed_datetime.strftime("%Y-%m-%d %H:%M")
             str_next = next_datetime.strftime("%Y-%m-%d %H:%M")
             
             update_kill_time_in_db(target_info["content"], str_kill, str_next)
-            st.sidebar.success(f"🎉 補登成功！\n【{target_info['real_name']}】\n下次重生：{str_next}")
+            st.sidebar.success(f"🎉 補登成功！\n【{target_info['real_name']}】\n倒王時間：{str_kill}\n下次重生：{str_next}")
             st.rerun()
 else:
     st.sidebar.info("💡 請先在上方的欄位輸入或點選一隻王怪以開始登記。")
@@ -281,6 +304,7 @@ tab1, tab2 = st.tabs(["📊 王表儀表板", "⚙️ 管理員後台"])
 with tab1:
     search_query = st.text_input("🔍 搜尋王怪狀態（可輸入名字、地點或簡稱）", "")
     current_df = get_all_bosses_from_db()
+    tw_now = get_tw_now() # ✨ 看板比對基準也全面改用台灣時間
 
     display_rows = []
     for idx, row in current_df.iterrows():
@@ -296,7 +320,7 @@ with tab1:
         if row['next_spawn'] and str(row['next_spawn']).strip() and row['next_spawn'] != "-":
             try:
                 next_sp = datetime.strptime(str(row['next_spawn']), "%Y-%m-%d %H:%M")
-                time_diff = next_sp - datetime.now()
+                time_diff = next_sp - tw_now # ✨ 使用台灣時間計算倒數
                 if time_diff.total_seconds() > 0:
                     mins_left = int(time_diff.total_seconds() // 60)
                     status = f"⏳ 倒數中 ({mins_left // 60}h {mins_left % 60}m)"
