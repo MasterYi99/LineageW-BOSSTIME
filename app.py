@@ -5,7 +5,7 @@ import json
 import sqlite3
 import re
 
-st.set_page_config(page_title="天堂W 盟用王表 (快捷輸入版)", layout="wide")
+st.set_page_config(page_title="天堂W 盟用王表 (檢索優化版)", layout="wide")
 st.title("🏰 《天堂W》王表管理系統")
 
 DB_FILE = "boss.db"
@@ -93,7 +93,7 @@ def init_db():
           {"TIME": "120", "CONTENT": "[龍之谷][三區飛龍]已重生", "NAME": "3"},
           {"TIME": "120", "CONTENT": "[龍之谷][三區飛龍]已重生", "NAME": "飛龍3"},
           {"TIME": "120", "CONTENT": "[龍之谷][二區飛龍]已重生", "NAME": "飛龍2"},
-          {"TIME": "120", "CONTENT": "[龍之谷][二區飛龍]已重生", "NAME": "2"},
+          {"TIME": "120", "CONTENT": "[龍之谷][二區飛龍] Shelton 已重生", "NAME": "2"},
           {"TIME": "120", "CONTENT": "[龍之谷][四區飛龍]已重生", "NAME": "4"},
           {"TIME": "120", "CONTENT": "[龍之谷][四區飛龍]已重生", "NAME": "飛龍4"},
           {"TIME": "180", "CONTENT": "[說話之島地監第1層][獻上祭品的庫約]已重生", "NAME": "庫約"},
@@ -201,11 +201,12 @@ else:
     time_multiplier = 1.0
 
 # -------------------------------------------------------------------------
-# 3. 側邊欄擊殺回報功能 (升級：支援 4 位數純數字輸入)
+# 3. 側邊欄擊殺回報功能 (優化：預設空白＋動態檢索)
 # -------------------------------------------------------------------------
 st.sidebar.header("⚔️ 擊殺回報")
 boss_df = get_all_bosses_from_db()
 
+# 建立別名檢索對照表
 search_options = {}
 for idx, row in boss_df.iterrows():
     aliases_list = row['aliases'].split(",")
@@ -216,55 +217,61 @@ for idx, row in boss_df.iterrows():
                 "content": row['content'], "real_name": row['real_name'], "cd_minutes": actual_cd
             }
 
-selected_option = st.sidebar.selectbox("選擇或輸入王怪別名", list(search_options.keys()))
+# ✨ 關鍵改動：將選單清單最前方插入一個空字串 "" 作為預設值
+menu_list = [""] + sorted(list(search_options.keys()))
 
-# 📝 改動：將原本的 time_input 改成 text_input 方便打字
-time_input_raw = st.sidebar.text_input("倒王時間 (留空=現在, 可輸入 1001 或 2331)", value="")
+selected_option = st.sidebar.selectbox(
+    "🔍 請輸入或選擇王怪別名", 
+    options=menu_list,
+    index=0, # 預設停在空白
+    placeholder="輸入簡稱，如: 飛龍、1、蟻后"
+)
 
-if st.sidebar.button("確認擊殺登記", type="primary"):
-    target_info = search_options[selected_option]
-    now_dt = datetime.now()
+# 只有當玩家真正選了某隻王（不為空字串）時，才顯示時間輸入與登記按鈕
+if selected_option != "":
+    time_input_raw = st.sidebar.text_input("倒王時間 (留空=現在, 可輸入 1001 或 2331)", value="")
     
-    # 📝 核心邏輯：解析玩家輸入的時間格式
-    parsed_time = None
-    input_clean = time_input_raw.strip()
-    
-    if input_clean == "":
-        # 留空代表「現在時間」
-        parsed_time = now_dt.time()
-    elif re.match(r"^\d{3,4}$", input_clean):
-        # 匹配 3 位或 4 位純數字 (例如 930 -> 09:30, 2331 -> 23:31)
-        if len(input_clean) == 3:
-            input_clean = "0" + input_clean # 補零變成 4 位數
+    if st.sidebar.button("確認擊殺登記", type="primary"):
+        target_info = search_options[selected_option]
+        now_dt = datetime.now()
         
-        hour = int(input_clean[0:2])
-        minute = int(input_clean[2:4])
+        parsed_time = None
+        input_clean = time_input_raw.strip()
         
-        # 防呆驗證是否符合正常的時分範圍
-        if 0 <= hour < 24 and 0 <= minute < 60:
-            parsed_time = datetime.now().replace(hour=hour, minute=minute, second=0, microsecond=0).time()
-        else:
-            st.sidebar.error("❌ 時間格式錯誤：小時必須在 00~23，分鐘必須在 00~59 之間！")
-    else:
-        st.sidebar.error("❌ 輸入格式不對！請輸入像 `1001` 或 `2331` 的純數字，或留空代表現在。")
-        
-    # 如果時間成功解析，進行下一步計算
-    if parsed_time:
-        today = now_dt.date()
-        kill_datetime = datetime.combine(today, parsed_time)
-        
-        # ⚠️ 防呆跨天邏輯：如果回報的時間比「現在」還要未來的太多，可能是跨夜指昨天的王
-        if kill_datetime > now_dt + timedelta(minutes=10):
-            kill_datetime = kill_datetime - timedelta(days=1)
+        if input_clean == "":
+            parsed_time = now_dt.time()
+        elif re.match(r"^\d{3,4}$", input_clean):
+            if len(input_clean) == 3:
+                input_clean = "0" + input_clean
             
-        next_datetime = kill_datetime + timedelta(minutes=int(target_info["cd_minutes"]))
-        
-        str_kill = kill_datetime.strftime("%Y-%m-%d %H:%M")
-        str_next = next_datetime.strftime("%Y-%m-%d %H:%M")
-        
-        update_kill_time_in_db(target_info["content"], str_kill, str_next)
-        st.sidebar.success(f"登記成功！\n【{target_info['real_name']}】\n倒王時間：{str_kill}\n下次重生：{str_next}")
-        st.rerun()
+            hour = int(input_clean[0:2])
+            minute = int(input_clean[2:4])
+            
+            if 0 <= hour < 24 and 0 <= minute < 60:
+                parsed_time = datetime.now().replace(hour=hour, minute=minute, second=0, microsecond=0).time()
+            else:
+                st.sidebar.error("❌ 時間錯誤：小時 00~23，分鐘 00~59 之間！")
+        else:
+            st.sidebar.error("❌ 格式錯誤！請輸入 4 位純數字如 `1001`。")
+            
+        if parsed_time:
+            today = now_dt.date()
+            kill_datetime = datetime.combine(today, parsed_time)
+            
+            # 跨夜防呆
+            if kill_datetime > now_dt + timedelta(minutes=10):
+                kill_datetime = kill_datetime - timedelta(days=1)
+                
+            next_datetime = kill_datetime + timedelta(minutes=int(target_info["cd_minutes"]))
+            
+            str_kill = kill_datetime.strftime("%Y-%m-%d %H:%M")
+            str_next = next_datetime.strftime("%Y-%m-%d %H:%M")
+            
+            update_kill_time_in_db(target_info["content"], str_kill, str_next)
+            st.sidebar.success(f"登記成功！\n【{target_info['real_name']}】\n下次重生：{str_next}")
+            st.rerun()
+else:
+    st.sidebar.info("💡 請先在上方的欄位輸入或點選一隻王怪以開始登記。")
 
 
 # -------------------------------------------------------------------------
@@ -274,7 +281,7 @@ tab1, tab2 = st.tabs(["📊 王表儀表板", "⚙️ 管理員後台"])
 
 # ---- 分頁 1：王表儀表板 ----
 with tab1:
-    search_query = st.text_input("🔍 搜尋王怪（可輸入名字、地點或簡稱）", "")
+    search_query = st.text_input("🔍 搜尋王怪狀態（可輸入名字、地點或簡稱）", "")
     current_df = get_all_bosses_from_db()
 
     display_rows = []
@@ -288,16 +295,21 @@ with tab1:
         
         display_cd = int(row['cd_minutes'] * time_multiplier)
         
-        if row['next_spawn']:
-            next_sp = datetime.strptime(row['next_spawn'], "%Y-%m-%d %H:%M")
-            time_diff = next_sp - datetime.now()
-            if time_diff.total_seconds() > 0:
-                mins_left = int(time_diff.total_seconds() // 60)
-                status = f"⏳ 倒數中 ({mins_left // 60}h {mins_left % 60}m)"
-                countdown_str = f"{mins_left // 60}h {mins_left % 60}m"
-            else:
-                status = "🚨 已過出王時間"
-                countdown_str = "已過期"
+        # ✨ 完美解決：加上多重型態與 try-except 驗證，絕不噴錯紅字
+        if row['next_spawn'] and str(row['next_spawn']).strip() and row['next_spawn'] != "-":
+            try:
+                next_sp = datetime.strptime(str(row['next_spawn']), "%Y-%m-%d %H:%M")
+                time_diff = next_sp - datetime.now()
+                if time_diff.total_seconds() > 0:
+                    mins_left = int(time_diff.total_seconds() // 60)
+                    status = f"⏳ 倒數中 ({mins_left // 60}h {mins_left % 60}m)"
+                    countdown_str = f"{mins_left // 60}h {mins_left % 60}m"
+                else:
+                    status = "🚨 已過出王時間"
+                    countdown_str = "已過期"
+            except Exception:
+                status = "⏳ 等待中"
+                countdown_str = "-"
 
         display_rows.append({
             "地點": row['location'],
