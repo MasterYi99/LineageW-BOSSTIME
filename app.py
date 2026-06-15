@@ -3,8 +3,9 @@ import pandas as pd
 from datetime import datetime, timedelta
 import json
 import sqlite3
+import re
 
-st.set_page_config(page_title="天堂W 盟用王表 (可編輯版)", layout="wide")
+st.set_page_config(page_title="天堂W 盟用王表 (快捷輸入版)", layout="wide")
 st.title("🏰 《天堂W》王表管理系統")
 
 DB_FILE = "boss.db"
@@ -32,9 +33,19 @@ def init_db():
             FOREIGN KEY(content) REFERENCES boss_info(content)
         )
     """)
+    cursor.execute("""
+        CREATE TABLE IF NOT EXISTS global_settings (
+            key TEXT PRIMARY KEY,
+            value TEXT
+        )
+    """)
     conn.commit()
     
-    # 檢查是否全新無資料，若是則匯入初始資料
+    cursor.execute("SELECT COUNT(*) FROM global_settings WHERE key = 'event_mode'")
+    if cursor.fetchone()[0] == 0:
+        cursor.execute("INSERT INTO global_settings VALUES ('event_mode', 'normal')")
+        conn.commit()
+    
     cursor.execute("SELECT COUNT(*) FROM boss_info")
     if cursor.fetchone()[0] == 0:
         raw_boss_json = """
@@ -123,7 +134,7 @@ def init_db():
             loc = parts[0].replace("[", "") if len(parts) > 0 else "未知"
             r_name = parts[1].replace("]", "") if len(parts) > 1 else "未知"
             if content not in temp_db:
-                temp_db[content] = {"real_name": r_name, "location": loc, "cd": int(item["TIME"]), "aliases": set()}
+                temp_db[content] = {"real_name": r_name, "location": loc, "cd": int(item["TIME"]) * 2, "aliases": set()}
             temp_db[content]["aliases"].add(item["NAME"])
             
         for content, info in temp_db.items():
@@ -131,6 +142,21 @@ def init_db():
             cursor.execute("INSERT INTO boss_info VALUES (?, ?, ?, ?, ?)", (content, info["real_name"], info["location"], info["cd"], aliases_str))
             cursor.execute("INSERT INTO boss_status VALUES (?, NULL, NULL)", (content,))
         conn.commit()
+    conn.close()
+
+def get_event_mode():
+    conn = sqlite3.connect(DB_FILE)
+    cursor = conn.cursor()
+    cursor.execute("SELECT value FROM global_settings WHERE key = 'event_mode'")
+    mode = cursor.fetchone()[0]
+    conn.close()
+    return mode
+
+def set_event_mode(mode):
+    conn = sqlite3.connect(DB_FILE)
+    cursor = conn.cursor()
+    cursor.execute("UPDATE global_settings SET value = ? WHERE key = 'event_mode'", (mode,))
+    conn.commit()
     conn.close()
 
 def get_all_bosses_from_db():
@@ -150,7 +176,6 @@ def update_kill_time_in_db(content, last_kill, next_spawn):
     conn.commit()
     conn.close()
 
-# 📝 新增：線上編輯更新資料庫的函數
 def update_boss_settings_in_db(content, new_name, new_cd, new_aliases):
     conn = sqlite3.connect(DB_FILE)
     cursor = conn.cursor()
@@ -165,7 +190,18 @@ def update_boss_settings_in_db(content, new_name, new_cd, new_aliases):
 init_db()
 
 # -------------------------------------------------------------------------
-# 2. 側邊欄擊殺回報功能
+# 2. 全局活動狀態看板
+# -------------------------------------------------------------------------
+current_mode = get_event_mode()
+if current_mode == "half":
+    st.error("🚨 警告：目前全服正處於【出王時間減半】活動期間！所有重生時間自動砍半計算。")
+    time_multiplier = 0.5
+else:
+    st.info("ℹ️ 目前狀態：正常模式（標準出王週期計算）。")
+    time_multiplier = 1.0
+
+# -------------------------------------------------------------------------
+# 3. 側邊欄擊殺回報功能 (升級：支援 4 位數純數字輸入)
 # -------------------------------------------------------------------------
 st.sidebar.header("⚔️ 擊殺回報")
 boss_df = get_all_bosses_from_db()
@@ -173,31 +209,66 @@ boss_df = get_all_bosses_from_db()
 search_options = {}
 for idx, row in boss_df.iterrows():
     aliases_list = row['aliases'].split(",")
+    actual_cd = int(row['cd_minutes'] * time_multiplier)
     for alias in aliases_list:
         if alias.strip():
             search_options[f"{alias} ({row['location']})"] = {
-                "content": row['content'], "real_name": row['real_name'], "cd_minutes": row['cd_minutes']
+                "content": row['content'], "real_name": row['real_name'], "cd_minutes": actual_cd
             }
 
 selected_option = st.sidebar.selectbox("選擇或輸入王怪別名", list(search_options.keys()))
-kill_time = st.sidebar.time_input("倒王時間（今日）", datetime.now().time())
+
+# 📝 改動：將原本的 time_input 改成 text_input 方便打字
+time_input_raw = st.sidebar.text_input("倒王時間 (留空=現在, 可輸入 1001 或 2331)", value="")
 
 if st.sidebar.button("確認擊殺登記", type="primary"):
     target_info = search_options[selected_option]
-    today = datetime.now().date()
-    kill_datetime = datetime.combine(today, kill_time)
-    next_datetime = kill_datetime + timedelta(minutes=int(target_info["cd_minutes"]))
+    now_dt = datetime.now()
     
-    str_kill = kill_datetime.strftime("%Y-%m-%d %H:%M")
-    str_next = next_datetime.strftime("%Y-%m-%d %H:%M")
+    # 📝 核心邏輯：解析玩家輸入的時間格式
+    parsed_time = None
+    input_clean = time_input_raw.strip()
     
-    update_kill_time_in_db(target_info["content"], str_kill, str_next)
-    st.sidebar.success(f"登記成功！\n{target_info['real_name']} 下次重生時間：{str_next}")
-    st.rerun()
+    if input_clean == "":
+        # 留空代表「現在時間」
+        parsed_time = now_dt.time()
+    elif re.match(r"^\d{3,4}$", input_clean):
+        # 匹配 3 位或 4 位純數字 (例如 930 -> 09:30, 2331 -> 23:31)
+        if len(input_clean) == 3:
+            input_clean = "0" + input_clean # 補零變成 4 位數
+        
+        hour = int(input_clean[0:2])
+        minute = int(input_clean[2:4])
+        
+        # 防呆驗證是否符合正常的時分範圍
+        if 0 <= hour < 24 and 0 <= minute < 60:
+            parsed_time = datetime.now().replace(hour=hour, minute=minute, second=0, microsecond=0).time()
+        else:
+            st.sidebar.error("❌ 時間格式錯誤：小時必須在 00~23，分鐘必須在 00~59 之間！")
+    else:
+        st.sidebar.error("❌ 輸入格式不對！請輸入像 `1001` 或 `2331` 的純數字，或留空代表現在。")
+        
+    # 如果時間成功解析，進行下一步計算
+    if parsed_time:
+        today = now_dt.date()
+        kill_datetime = datetime.combine(today, parsed_time)
+        
+        # ⚠️ 防呆跨天邏輯：如果回報的時間比「現在」還要未來的太多，可能是跨夜指昨天的王
+        if kill_datetime > now_dt + timedelta(minutes=10):
+            kill_datetime = kill_datetime - timedelta(days=1)
+            
+        next_datetime = kill_datetime + timedelta(minutes=int(target_info["cd_minutes"]))
+        
+        str_kill = kill_datetime.strftime("%Y-%m-%d %H:%M")
+        str_next = next_datetime.strftime("%Y-%m-%d %H:%M")
+        
+        update_kill_time_in_db(target_info["content"], str_kill, str_next)
+        st.sidebar.success(f"登記成功！\n【{target_info['real_name']}】\n倒王時間：{str_kill}\n下次重生：{str_next}")
+        st.rerun()
 
 
 # -------------------------------------------------------------------------
-# 3. 主畫面分頁導覽：區分「王表儀表板」與「管理員後台」
+# 4. 主畫面分頁導覽
 # -------------------------------------------------------------------------
 tab1, tab2 = st.tabs(["📊 王表儀表板", "⚙️ 管理員後台"])
 
@@ -215,6 +286,8 @@ with tab1:
         status = "⏳ 等待中"
         countdown_str = "-"
         
+        display_cd = int(row['cd_minutes'] * time_multiplier)
+        
         if row['next_spawn']:
             next_sp = datetime.strptime(row['next_spawn'], "%Y-%m-%d %H:%M")
             time_diff = next_sp - datetime.now()
@@ -230,7 +303,7 @@ with tab1:
             "地點": row['location'],
             "王怪主名稱": row['real_name'],
             "遊戲內簡稱/別名": row['aliases'].replace(",", ", "),
-            "週期(分鐘)": row['cd_minutes'],
+            "當前週期(分鐘)": display_cd,
             "上次擊殺時間": row['last_kill'] if row['last_kill'] else "-",
             "預計出生時間": row['next_spawn'] if row['next_spawn'] else "-",
             "距離重生倒數": countdown_str,
@@ -249,43 +322,48 @@ with tab1:
         st.rerun()
 
 
-# ---- 分頁 2：管理員後台 (線上編輯功能) ----
+# ---- 分頁 2：管理員後台 ----
 with tab2:
-    st.subheader("🛠 編輯王怪參數設定")
-    st.write("在下方選擇你想修改的王怪，調整完成後點擊「儲存修改」即可直接更新資料庫。")
+    st.subheader("🚀 全服活動一鍵切換")
+    col_act1, col_act2 = st.columns(2)
+    with col_act1:
+        if st.button("🔴 啟動：一鍵時間減半", use_container_width=True, type="secondary" if current_mode=="half" else "primary"):
+            set_event_mode("half")
+            st.success("已成功開啟減半活動！全體王怪重生時間立即減半計算。")
+            st.rerun()
+    with col_act2:
+        if st.button("🟢 還原：一鍵恢復正常週期", use_container_width=True, type="primary" if current_mode=="normal" else "secondary"):
+            set_event_mode("normal")
+            st.success("已成功關閉活動！王怪重生時間恢復為正常標準週期。")
+            st.rerun()
+            
+    st.markdown("---")
+    st.subheader("🛠 基礎參數細部微調")
     
-    # 建立一個方便辨識的管理清單
     edit_options = {}
     for idx, row in current_df.iterrows():
-        edit_options[f"[{row['location']}] {row['real_name']} (當前CD: {row['cd_minutes']}分鐘)"] = row
+        edit_options[f"[{row['location']}] {row['real_name']} (標準原始CD: {row['cd_minutes']}分鐘)"] = row
 
     selected_edit_label = st.selectbox("請選擇要修改的王怪項目", list(edit_options.keys()))
     boss_to_edit = edit_options[selected_edit_label]
     
-    # 建立編輯表單
     with st.form("edit_form"):
         col1, col2 = st.columns(2)
         with col1:
             new_name = st.text_input("王怪主名稱", value=boss_to_edit['real_name'])
         with col2:
-            new_cd = st.number_input("重生週期（分鐘）", value=int(boss_to_edit['cd_minutes']), min_value=1, step=1)
+            new_cd = st.number_input("標準原始週期（分鐘）", value=int(boss_to_edit['cd_minutes']), min_value=1, step=1)
             
         new_aliases = st.text_area("遊戲內回報簡稱/別名（請用英文逗號 `,` 隔開多個別名）", value=boss_to_edit['aliases'])
-        
-        submit_btn = st.form_submit_with_colors = st.form_submit_button("💾 儲存修改", type="primary")
+        submit_btn = st.form_submit_button("💾 儲存修改", type="primary")
         
         if submit_btn:
-            # 📝 防呆：將使用者輸入的中文逗號自動取代為英文逗號
             cleaned_aliases = new_aliases.replace("，", ",")
-            
-            # 寫入資料庫
             update_boss_settings_in_db(
                 content=boss_to_edit['content'],
                 new_name=new_name,
                 new_cd=new_cd,
                 new_aliases=cleaned_aliases
             )
-            st.success(f"🎉 成功修改！「{new_name}」的週期已更新為 {new_cd} 分鐘，別名已更新。")
-            
-            # 延遲刷新網頁，讓使用者看得到成功訊息
+            st.success(f"🎉 修改成功！已更新「{new_name}」的原始週期設定。")
             st.rerun()
