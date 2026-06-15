@@ -5,7 +5,7 @@ import json
 import sqlite3
 import re
 
-st.set_page_config(page_title="天堂W 盟用王表 (時區修正版)", layout="wide")
+st.set_page_config(page_title="天堂W 盟用王表 (全功能優化版)", layout="wide")
 st.title("🏰 《天堂W》王表管理系統")
 
 DB_FILE = "boss.db"
@@ -14,8 +14,6 @@ DB_FILE = "boss.db"
 # 🛠 輔助函數：強制取得台灣時間 (台北時區 UTC+8)
 # -------------------------------------------------------------------------
 def get_tw_now():
-    """無視雲端伺服器在哪裡，強制取得精準的台灣當下時間"""
-    # 雲端伺服器通常是 UTC 時間，台灣時間 = UTC + 8 小時
     return datetime.utcnow() + timedelta(hours=8)
 
 # -------------------------------------------------------------------------
@@ -184,6 +182,14 @@ def update_kill_time_in_db(content, last_kill, next_spawn):
     conn.commit()
     conn.close()
 
+def clear_all_boss_times_in_db():
+    """💥 一鍵清空所有王怪的擊殺與重生時間，恢復初始化狀態"""
+    conn = sqlite3.connect(DB_FILE)
+    cursor = conn.cursor()
+    cursor.execute("UPDATE boss_status SET last_kill = NULL, next_spawn = NULL")
+    conn.commit()
+    conn.close()
+
 def update_boss_settings_in_db(content, new_name, new_cd, new_aliases):
     conn = sqlite3.connect(DB_FILE)
     cursor = conn.cursor()
@@ -226,10 +232,11 @@ for idx, row in boss_df.iterrows():
 
 menu_list = [""] + sorted(list(search_options.keys()))
 
+# ✨ 為了能「登記完自動清空輸入欄與下拉選單」，我們引入 Streamlit 的 key 機制來綁定狀態
 selected_option = st.sidebar.selectbox(
     "🔍 請輸入或選擇王怪別名", 
     options=menu_list,
-    index=0, 
+    key="sb_boss_select", # 綁定唯一的 Key
     placeholder="輸入簡稱，如: 飛龍、1、蟻后"
 )
 
@@ -237,7 +244,7 @@ if selected_option != "":
     target_info = search_options[selected_option]
     st.sidebar.markdown(f"**🎯 已選王怪：** `{target_info['real_name']}`")
     
-    # 【一鍵秒報現在時間】 -> 修正：全面改用 get_tw_now() 抓台北時間
+    # 【一鍵秒報現在時間】
     if st.sidebar.button("⏱️ 剛打完！一鍵回報現在時間", use_container_width=True, type="primary"):
         kill_datetime = get_tw_now()
         next_datetime = kill_datetime + timedelta(minutes=int(target_info["cd_minutes"]))
@@ -246,16 +253,21 @@ if selected_option != "":
         str_next = next_datetime.strftime("%Y-%m-%d %H:%M")
         
         update_kill_time_in_db(target_info["content"], str_kill, str_next)
+        
+        # ✨ 關鍵淨空設定：登記成功後，重置選單回第 0 項 (空白)
+        st.session_state["sb_boss_select"] = ""
+        
         st.sidebar.success(f"⚡ 秒報成功！\n【{target_info['real_name']}】\n下次重生：{str_next}")
         st.rerun()
         
     st.sidebar.markdown("<hr style='margin:10px 0; border-top:1px dashed #ccc;'>", unsafe_allow_html=True)
     st.sidebar.write("✍️ 補登記其他時間：")
     
-    time_input_raw = st.sidebar.text_input("輸入時間 (例如 0123 或 2331)", value="")
+    # ✨ 這裡同樣綁定 key="ti_time_input" 方便輸入完後一併淨空
+    time_input_raw = st.sidebar.text_input("輸入時間 (例如 0123 或 2331)", key="ti_time_input", value="")
     
     if st.sidebar.button("確認手動登記", use_container_width=True):
-        tw_now = get_tw_now() # ✨ 改用台灣時間作為對照基準
+        tw_now = get_tw_now()
         parsed_datetime = None
         input_clean = time_input_raw.strip()
         
@@ -269,7 +281,6 @@ if selected_option != "":
             min_val = int(input_clean[2:4])
             
             if 0 <= hour_val < 24 and 0 <= min_val < 60:
-                # ✨ 終極安全時間組合法：直接用當天的年月手動拼字，完全繞過帶有時區陷阱的 .replace()
                 today_str = tw_now.strftime("%Y-%m-%d")
                 parsed_datetime = datetime.strptime(f"{today_str} {hour_val:02d}:{min_val:02d}", "%Y-%m-%d %H:%M")
             else:
@@ -278,8 +289,6 @@ if selected_option != "":
             st.sidebar.error("❌ 格式錯誤！請輸入 4 位純數字如 `0123`。")
             
         if parsed_datetime:
-            # ✨ 修正後的寬容版跨夜防呆邏輯
-            # 如果輸入的時間比現在的台灣時間還超前 6 小時以上，才認定是昨天跨夜的王
             if parsed_datetime > tw_now + timedelta(hours=6):
                 parsed_datetime = parsed_datetime - timedelta(days=1)
                 
@@ -289,7 +298,12 @@ if selected_option != "":
             str_next = next_datetime.strftime("%Y-%m-%d %H:%M")
             
             update_kill_time_in_db(target_info["content"], str_kill, str_next)
-            st.sidebar.success(f"🎉 補登成功！\n【{target_info['real_name']}】\n倒王時間：{str_kill}\n下次重生：{str_next}")
+            
+            # ✨ 關鍵淨空設定：手動登記成功後，將選單與時間欄同步重置回初始空白狀態
+            st.session_state["sb_boss_select"] = ""
+            st.session_state["ti_time_input"] = ""
+            
+            st.sidebar.success(f"🎉 補登成功！\n【{target_info['real_name']}】\n下次重生：{str_next}")
             st.rerun()
 else:
     st.sidebar.info("💡 請先在上方的欄位輸入或點選一隻王怪以開始登記。")
@@ -304,7 +318,7 @@ tab1, tab2 = st.tabs(["📊 王表儀表板", "⚙️ 管理員後台"])
 with tab1:
     search_query = st.text_input("🔍 搜尋王怪狀態（可輸入名字、地點或簡稱）", "")
     current_df = get_all_bosses_from_db()
-    tw_now = get_tw_now() # ✨ 看板比對基準也全面改用台灣時間
+    tw_now = get_tw_now()
 
     display_rows = []
     for idx, row in current_df.iterrows():
@@ -320,7 +334,7 @@ with tab1:
         if row['next_spawn'] and str(row['next_spawn']).strip() and row['next_spawn'] != "-":
             try:
                 next_sp = datetime.strptime(str(row['next_spawn']), "%Y-%m-%d %H:%M")
-                time_diff = next_sp - tw_now # ✨ 使用台灣時間計算倒數
+                time_diff = next_sp - tw_now
                 if time_diff.total_seconds() > 0:
                     mins_left = int(time_diff.total_seconds() // 60)
                     status = f"⏳ 倒數中 ({mins_left // 60}h {mins_left % 60}m)"
@@ -369,6 +383,18 @@ with tab2:
             set_event_mode("normal")
             st.success("已成功關閉活動！王怪重生時間恢復為正常標準週期。")
             st.rerun()
+            
+    # ⚡ 核心功能：一鍵清空所有時間（加入二次確認防呆，避免手殘誤觸）
+    st.markdown("---")
+    st.subheader("💥 伺服器重置 / 王表大洗牌")
+    st.write("此功能將會清空目前資料庫中所有王怪的『擊殺時間』與『預計出生時間』，讓全體王怪回歸到【等待中】的初始狀態。")
+    
+    # 建立一個勾選方塊作為安全鎖
+    confirm_clear = st.checkbox("⚠️ 我確定要清空全服所有王怪的時間記錄，且明白此操作無法復原。")
+    if st.button("🔥 確定執行：一鍵清空所有王怪時間", type="primary", disabled=not confirm_clear):
+        clear_all_boss_times_in_db()
+        st.success("🎉 全服王怪時間已成功清空！所有項目已初始化為『等待中』。")
+        st.rerun()
             
     st.markdown("---")
     st.subheader("🛠 基礎參數細部微調")
