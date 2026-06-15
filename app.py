@@ -5,13 +5,13 @@ import json
 import sqlite3
 import re
 
-st.set_page_config(page_title="天堂W 盟用王表 (穩定商業版)", layout="wide")
+st.set_page_config(page_title="天堂W 盟用王表 (完整穩定版)", layout="wide")
 st.title("🏰 《天堂W》王表管理系統")
 
 DB_FILE = "boss.db"
 
 # -------------------------------------------------------------------------
-# 🛠 輔支函數：強制取得台灣時間 (台北時區 UTC+8)
+# 🛠 輔助函數：強制取得台灣時間 (台北時區 UTC+8)
 # -------------------------------------------------------------------------
 def get_tw_now():
     return datetime.utcnow() + timedelta(hours=8)
@@ -56,25 +56,7 @@ def init_db():
     if cursor.fetchone()[0] == 0:
         raw_boss_json = """
         [
-          {"TIME": "30", "CONTENT": "[古魯丁地監第5層][托魯克]已重生", "NAME": "托魯克"},
-          {"TIME": "30", "CONTENT": "[古魯丁地監第7層][卡修阿特]已重生", "NAME": "卡修阿特"},
-          {"TIME": "30", "CONTENT": "[徘徊者之地][亡命之徒]已重生", "NAME": "亡命之徒"},
-          {"TIME": "30", "CONTENT": "[徘徊者之地][亡命之徒]已重生", "NAME": "亡命"},
-          {"TIME": "30", "CONTENT": "[淨化大地][咒術師斯科特]已重生", "NAME": "咒術師斯科特"},
-          {"TIME": "30", "CONTENT": "[淨化大地][咒術師斯科特]已重生", "NAME": "斯科特"},
-          {"TIME": "30", "CONTENT": "[說話之島][佩迪卡]已重生", "NAME": "佩迪卡"},
-          {"TIME": "30", "CONTENT": "[說話之島][克頓阿托魯]已重生", "NAME": "克頓阿托魯"},
-          {"TIME": "30", "CONTENT": "[說話之島][克頓阿托魯]已重生", "NAME": "克頓"},
-          {"TIME": "30", "CONTENT": "[說話之島][哭臉]已重生", "NAME": "哭臉"},
-          {"TIME": "30", "CONTENT": "[說話之島][巴魯德拉克]已重生", "NAME": "巴魯德拉克"},
-          {"TIME": "30", "CONTENT": "[說話之島][巴魯德拉克]已重生", "NAME": "巴魯"},
-          {"TIME": "30", "CONTENT": "[說話之島][斯卡魯斯]已重生", "NAME": "斯卡"},
-          {"TIME": "30", "CONTENT": "[說話之島][斯卡魯斯]已重生", "NAME": "斯卡魯斯"},
-          {"TIME": "30", "CONTENT": "[說話之島][流口水的齊戈爾]已重生", "NAME": "齊戈爾"},
-          {"TIME": "30", "CONTENT": "[說話之島][流口水的齊戈爾]已重生", "NAME": "流口水的齊戈爾"},
-          {"TIME": "30", "CONTENT": "[說話之島地監第2層][黑鋼]已重生", "NAME": "黑鋼"},
-          {"TIME": "30", "CONTENT": "[黑戰艦第2層][沒落的德佩托]已重生", "NAME": "沒落的德佩托"},
-          {"TIME": "30", "CONTENT": "[黑戰艦第2層][沒落的德佩托]已重生", "NAME": "德佩托"},
+       
           {"TIME": "120", "CONTENT": "[亞丁城堡監獄第1層][黑蛇騎士團麥肯]已重生", "NAME": "麥"},
           {"TIME": "120", "CONTENT": "[亞丁城堡監獄第1層][黑蛇騎士團麥肯]已重生", "NAME": "麥肯"},
           {"TIME": "120", "CONTENT": "[亞丁農場][黑虎恰姆帕瓦特]已重生", "NAME": "黑虎"},
@@ -207,16 +189,16 @@ init_db()
 # -------------------------------------------------------------------------
 current_mode = get_event_mode()
 if current_mode == "half":
-    st.error("🚨 警告：目前全服正處於【出王時間減半】活動期間！所有重生時間自動砍半計算。")
+    st.error("🚨 警告：目前全服正處於【出王時間減半】活動期間！")
     time_multiplier = 0.5
 else:
-    st.info("ℹ️ 目前狀態：正常模式（標準出王週期計算）。")
+    st.info("ℹ️ 目前狀態：正常模式（標準出王週期）。")
     time_multiplier = 1.0
 
 # -------------------------------------------------------------------------
-# 3. 側邊欄擊殺回報功能 (✨ 移除會引發崩潰的強制修改，改用表單快取重置法)
+# 3. 側邊欄擊殺回報功能 (✨採用最安全穩定的 Form 表單機制，提交自動清空)
 # -------------------------------------------------------------------------
-st.sidebar.header("⚔️ 擊殺回報")
+st.sidebar.header("⚔️ 擊殺回報區")
 boss_df = get_all_bosses_from_db()
 
 search_options = {}
@@ -231,5 +213,179 @@ for idx, row in boss_df.iterrows():
 
 menu_list = [""] + sorted(list(search_options.keys()))
 
-# 為了在送出後能乾淨重置，我們將擊殺回報區塊包進一個沒有確認按鈕的虛擬小容器（或稱獨立控制區）
-# 這裡使用獨一無二的隨機 key
+# 使用 Streamlit 官方推薦的 st.form 控制。當按鈕按下去時，表單內輸入的所有東西會自然被清空，完全不踩 session 崩潰雷
+with st.sidebar.form(key="boss_report_form", clear_on_submit=True):
+    selected_option = st.selectbox(
+        "🔍 請選擇或搜尋王怪別名", 
+        options=menu_list,
+        placeholder="輸入簡稱，如: 飛龍、1、蟻后"
+    )
+    
+    st.write("---")
+    st.write("💡 **回報方式 (二選一)：**")
+    
+    # 動作一：秒報按鈕
+    click_now = st.form_submit_button("⏱️ 剛打完！一鍵報現在時間", use_container_width=True, type="primary")
+    
+    # 動作二：手動補登輸入欄
+    time_input_raw = st.text_input("✍️ 補登其他時間 (例如 0123 或 2331)", value="")
+    click_manual = st.form_submit_button("確認手動補登時間", use_container_width=True)
+
+    # 處理回報邏輯
+    if click_now or click_manual:
+        if not selected_option:
+            st.error("❌ 請先選擇要回報的王怪！")
+        else:
+            target_info = search_options[selected_option]
+            tw_now = get_tw_now()
+            executed = False
+            parsed_datetime = None
+            
+            if click_now:
+                parsed_datetime = tw_now
+                executed = True
+            elif click_manual:
+                input_clean = time_input_raw.strip()
+                if input_clean == "":
+                    st.error("❌ 手動登記請輸入時間數字！")
+                elif re.match(r"^\d{3,4}$", input_clean):
+                    if len(input_clean) == 3:
+                        input_clean = "0" + input_clean
+                    
+                    hour_val = int(input_clean[0:2])
+                    min_val = int(input_clean[2:4])
+                    
+                    if 0 <= hour_val < 24 and 0 <= min_val < 60:
+                        today_str = tw_now.strftime("%Y-%m-%d")
+                        parsed_datetime = datetime.strptime(f"{today_str} {hour_val:02d}:{min_val:02d}", "%Y-%m-%d %H:%M")
+                        if parsed_datetime > tw_now + timedelta(hours=6):
+                            parsed_datetime = parsed_datetime - timedelta(days=1)
+                        executed = True
+                    else:
+                        st.error("❌ 時間錯誤：小時 00~23，分鐘 00~59 之間！")
+                else:
+                    st.error("❌ 格式錯誤！請輸入 4 位純數字如 `0123`。")
+            
+            if executed and parsed_datetime:
+                next_datetime = parsed_datetime + timedelta(minutes=int(target_info["cd_minutes"]))
+                str_kill = parsed_datetime.strftime("%Y-%m-%d %H:%M")
+                str_next = next_datetime.strftime("%Y-%m-%d %H:%M")
+                
+                update_kill_time_in_db(target_info["content"], str_kill, str_next)
+                st.success(f"🎉 成功！\n【{target_info['real_name']}】\n下次重生：{str_next}")
+                st.rerun()
+
+# -------------------------------------------------------------------------
+# 4. 主畫面分頁導覽
+# -------------------------------------------------------------------------
+tab1, tab2 = st.tabs(["📊 王表儀表板", "⚙️ 管理員後台"])
+
+# ---- 分頁 1：王表儀表板 ----
+with tab1:
+    search_query = st.text_input("🔍 搜尋王怪狀態（可輸入名字、地點或簡稱）", "")
+    current_df = get_all_bosses_from_db()
+    tw_now = get_tw_now()
+
+    display_rows = []
+    for idx, row in current_df.iterrows():
+        all_names_str = f"{row['real_name']} {row['aliases']} {row['location']}"
+        if search_query and search_query.lower() not in all_names_str.lower():
+            continue
+            
+        status = "⏳ 等待中"
+        countdown_str = "-"
+        display_cd = int(row['cd_minutes'] * time_multiplier)
+        
+        if row['next_spawn'] and str(row['next_spawn']).strip() and row['next_spawn'] != "-":
+            try:
+                next_sp = datetime.strptime(str(row['next_spawn']), "%Y-%m-%d %H:%M")
+                time_diff = next_sp - tw_now
+                if time_diff.total_seconds() > 0:
+                    mins_left = int(time_diff.total_seconds() // 60)
+                    status = f"⏳ 倒數中 ({mins_left // 60}h {mins_left % 60}m)"
+                    countdown_str = f"{mins_left // 60}h {mins_left % 60}m"
+                else:
+                    status = "🚨 已過出王時間"
+                    countdown_str = "已過期"
+            except Exception:
+                status = "⏳ 等待中"
+                countdown_str = "-"
+
+        display_rows.append({
+            "地點": row['location'],
+            "王怪主名稱": row['real_name'],
+            "遊戲內簡稱/別名": row['aliases'].replace(",", ", "),
+            "當前週期(分鐘)": display_cd,
+            "上次擊殺時間": row['last_kill'] if row['last_kill'] else "-",
+            "預計出生時間": row['next_spawn'] if row['next_spawn'] else "-",
+            "距離重生倒數": countdown_str,
+            "狀態": status,
+            "raw_next_spawn": row['next_spawn'] if row['next_spawn'] else "9999-12-31 23:59"
+        })
+
+    if display_rows:
+        df_show = pd.DataFrame(display_rows)
+        df_show = df_show.sort_values(by="raw_next_spawn").drop(columns=['raw_next_spawn'])
+        st.dataframe(df_show, use_container_width=True, hide_index=True)
+    else:
+        st.info("沒有找到符合搜尋條件的王怪。")
+
+    if st.button("🔄 刷新計時看板"):
+        st.rerun()
+
+# ---- 分頁 2：管理員後台 ----
+with tab2:
+    st.subheader("🚀 全服活動一鍵切換")
+    col_act1, col_act2 = st.columns(2)
+    with col_act1:
+        if st.button("🔴 啟動：一鍵時間減半", use_container_width=True, type="secondary" if current_mode=="half" else "primary"):
+            set_event_mode("half")
+            st.success("已成功開啟減半活動！")
+            st.rerun()
+    with col_act2:
+        if st.button("🟢 還原：一鍵恢復正常週期", use_container_width=True, type="primary" if current_mode=="normal" else "secondary"):
+            set_event_mode("normal")
+            st.success("已成功關閉活動！")
+            st.rerun()
+            
+    # ⚡ 核心功能：一鍵清空所有時間
+    st.markdown("---")
+    st.subheader("💥 伺服器重置 / 王表大洗牌")
+    st.write("此功能將會清空目前資料庫中所有王怪的『擊殺時間』與『預計出生時間』，讓全體王怪回歸到【等待中】的初始狀態。")
+    
+    confirm_clear = st.checkbox("⚠️ 我確定要清空全服所有王怪的時間記錄，且明白此操作無法復原。")
+    if st.button("🔥 確定執行：一鍵清空所有王怪時間", type="primary", disabled=not confirm_clear):
+        clear_all_boss_times_in_db()
+        st.success("🎉 全服王怪時間已成功清空！所有項目已初始化為『等待中』。")
+        st.rerun()
+            
+    st.markdown("---")
+    st.subheader("🛠 基礎參數細部微調")
+    
+    edit_options = {}
+    for idx, row in boss_df.iterrows():
+        edit_options[f"[{row['location']}] {row['real_name']} (標準原始CD: {row['cd_minutes']}分鐘)"] = row
+
+    selected_edit_label = st.selectbox("請選擇要修改的王怪項目", list(edit_options.keys()))
+    boss_to_edit = edit_options[selected_edit_label]
+    
+    with st.form("edit_form"):
+        col1, col2 = st.columns(2)
+        with col1:
+            new_name = st.text_input("王怪主名稱", value=boss_to_edit['real_name'])
+        with col2:
+            new_cd = st.number_input("標準原始週期（分鐘）", value=int(boss_to_edit['cd_minutes']), min_value=1, step=1)
+            
+        new_aliases = st.text_area("遊戲內回報簡稱/別名（請用英文逗號 `,` 隔開多個別名）", value=boss_to_edit['aliases'])
+        submit_btn = st.form_submit_button("💾 儲存修改", type="primary")
+        
+        if submit_btn:
+            cleaned_aliases = new_aliases.replace("，", ",")
+            update_boss_settings_in_db(
+                content=boss_to_edit['content'],
+                new_name=new_name,
+                new_cd=new_cd,
+                new_aliases=cleaned_aliases
+            )
+            st.success(f"🎉 修改成功！已更新「{new_name}」的原始週期設定。")
+            st.rerun()
