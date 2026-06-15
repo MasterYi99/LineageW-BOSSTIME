@@ -5,7 +5,7 @@ import json
 import sqlite3
 import re
 
-st.set_page_config(page_title="天堂W 盟用王表 (全功能優化版)", layout="wide")
+st.set_page_config(page_title="天堂W 盟用王表 (完工穩定版)", layout="wide")
 st.title("🏰 《天堂W》王表管理系統")
 
 DB_FILE = "boss.db"
@@ -56,7 +56,25 @@ def init_db():
     if cursor.fetchone()[0] == 0:
         raw_boss_json = """
         [
-         
+          {"TIME": "30", "CONTENT": "[古魯丁地監第5層][托魯克]已重生", "NAME": "托魯克"},
+          {"TIME": "30", "CONTENT": "[古魯丁地監第7層][卡修阿特]已重生", "NAME": "卡修阿特"},
+          {"TIME": "30", "CONTENT": "[徘徊者之地][亡命之徒]已重生", "NAME": "亡命之徒"},
+          {"TIME": "30", "CONTENT": "[徘徊者之地][亡命之徒]已重生", "NAME": "亡命"},
+          {"TIME": "30", "CONTENT": "[淨化大地][咒術師斯科特]已重生", "NAME": "咒術師斯科特"},
+          {"TIME": "30", "CONTENT": "[淨化大地][咒術師斯科特]已重生", "NAME": "斯科特"},
+          {"TIME": "30", "CONTENT": "[說話之島][佩迪卡]已重生", "NAME": "佩迪卡"},
+          {"TIME": "30", "CONTENT": "[說話之島][克頓阿托魯]已重生", "NAME": "克頓阿托魯"},
+          {"TIME": "30", "CONTENT": "[說話之島][克頓阿托魯]已重生", "NAME": "克頓"},
+          {"TIME": "30", "CONTENT": "[說話之島][哭臉]已重生", "NAME": "哭臉"},
+          {"TIME": "30", "CONTENT": "[說話之島][巴魯德拉克]已重生", "NAME": "巴魯德拉克"},
+          {"TIME": "30", "CONTENT": "[說話之島][巴魯德拉克]已重生", "NAME": "巴魯"},
+          {"TIME": "30", "CONTENT": "[說話之島][斯卡魯斯]已重生", "NAME": "斯卡"},
+          {"TIME": "30", "CONTENT": "[說話之島][斯卡魯斯]已重生", "NAME": "斯卡魯斯"},
+          {"TIME": "30", "CONTENT": "[說話之島][流口水的齊戈爾]已重生", "NAME": "齊戈爾"},
+          {"TIME": "30", "CONTENT": "[說話之島][流口水的齊戈爾]已重生", "NAME": "流口水的齊戈爾"},
+          {"TIME": "30", "CONTENT": "[說話之島地監第2層][黑鋼]已重生", "NAME": "黑鋼"},
+          {"TIME": "30", "CONTENT": "[黑戰艦第2層][沒落的德佩托]已重生", "NAME": "沒落的德佩托"},
+          {"TIME": "30", "CONTENT": "[黑戰艦第2層][沒落的德佩托]已重生", "NAME": "德佩托"},
           {"TIME": "120", "CONTENT": "[亞丁城堡監獄第1層][黑蛇騎士團麥肯]已重生", "NAME": "麥"},
           {"TIME": "120", "CONTENT": "[亞丁城堡監獄第1層][黑蛇騎士團麥肯]已重生", "NAME": "麥肯"},
           {"TIME": "120", "CONTENT": "[亞丁農場][黑虎恰姆帕瓦特]已重生", "NAME": "黑虎"},
@@ -85,7 +103,7 @@ def init_db():
           {"TIME": "120", "CONTENT": "[龍之谷][四區飛龍]已重生", "NAME": "4"},
           {"TIME": "120", "CONTENT": "[龍之谷][四區飛龍]已重生", "NAME": "飛龍4"},
           {"TIME": "180", "CONTENT": "[說話之島地監第1層][獻上祭品的庫約]已重生", "NAME": "庫約"},
-          {"TIME": "480", "CONTENT": "[古魯丁地監第6層][克洛林]已重生", "NAME": "克洛林"},
+          {"TIME": "240", "CONTENT": "[古魯丁地監第6層][克洛林]已重生", "NAME": "克洛林"},
           {"TIME": "240", "CONTENT": "[妖魔森林][奈克偌斯]已重生", "NAME": "奈克"},
           {"TIME": "240", "CONTENT": "[妖魔森林][奈克偌斯]已重生", "NAME": "N"},
           {"TIME": "240", "CONTENT": "[妖魔森林][奈克偌斯]已重生", "NAME": "奈克偌斯"},
@@ -107,7 +125,7 @@ def init_db():
           {"TIME": "240", "CONTENT": "[遺忘的春之庭院][審判者拉馬修]已重生", "NAME": "審判者"},
           {"TIME": "240", "CONTENT": "[霧月島][史前巨鱷]已重生", "NAME": "史前巨鱷"},
           {"TIME": "240", "CONTENT": "[霧月島][史前巨鱷]已重生", "NAME": "巨鱷"},
-          {"TIME": "720", "CONTENT": "[古魯丁地監三四樓][四色]已重生", "NAME": "四色"},
+          {"TIME": "360", "CONTENT": "[古魯丁地監三四樓][四色]已重生", "NAME": "四色"},
           {"TIME": "360", "CONTENT": "[峽谷支配者][二巨]已重生", "NAME": "巨"},
           {"TIME": "360", "CONTENT": "[峽谷支配者][二巨]已重生", "NAME": "二巨"},
           {"TIME": "360", "CONTENT": "[峽谷支配者][二巨]已重生", "NAME": "吞噬岩石的戈爾森"},
@@ -165,7 +183,6 @@ def update_kill_time_in_db(content, last_kill, next_spawn):
     conn.close()
 
 def clear_all_boss_times_in_db():
-    """💥 一鍵清空所有王怪的擊殺與重生時間，恢復初始化狀態"""
     conn = sqlite3.connect(DB_FILE)
     cursor = conn.cursor()
     cursor.execute("UPDATE boss_status SET last_kill = NULL, next_spawn = NULL")
@@ -214,11 +231,17 @@ for idx, row in boss_df.iterrows():
 
 menu_list = [""] + sorted(list(search_options.keys()))
 
-# ✨ 為了能「登記完自動清空輸入欄與下拉選單」，我們引入 Streamlit 的 key 機制來綁定狀態
+# ✨ 修正點 1：初始化控制項的 session_state 預設值，防止其不存在
+if "sb_boss_select" not in st.session_state:
+    st.session_state["sb_boss_select"] = ""
+if "ti_time_input" not in st.session_state:
+    st.session_state["ti_time_input"] = ""
+
+# 渲染下拉選單
 selected_option = st.sidebar.selectbox(
     "🔍 請輸入或選擇王怪別名", 
     options=menu_list,
-    key="sb_boss_select", # 綁定唯一的 Key
+    key="sb_boss_select", 
     placeholder="輸入簡稱，如: 飛龍、1、蟻后"
 )
 
@@ -236,8 +259,11 @@ if selected_option != "":
         
         update_kill_time_in_db(target_info["content"], str_kill, str_next)
         
-        # ✨ 關鍵淨空設定：登記成功後，重置選單回第 0 項 (空白)
-        st.session_state["sb_boss_select"] = ""
+        # ✨ 修正點 2：安全地清除狀態方法（不直接給 key 賦值，而是利用 st.rerun 清除現有活動值）
+        # 先清除不關聯的普通文字框
+        st.session_state["ti_time_input"] = ""
+        # 強制覆寫對應快取來讓 selectbox 歸零
+        st.session_state["sb_boss_select"] = menu_list[0]
         
         st.sidebar.success(f"⚡ 秒報成功！\n【{target_info['real_name']}】\n下次重生：{str_next}")
         st.rerun()
@@ -245,13 +271,12 @@ if selected_option != "":
     st.sidebar.markdown("<hr style='margin:10px 0; border-top:1px dashed #ccc;'>", unsafe_allow_html=True)
     st.sidebar.write("✍️ 補登記其他時間：")
     
-    # ✨ 這裡同樣綁定 key="ti_time_input" 方便輸入完後一併淨空
-    time_input_raw = st.sidebar.text_input("輸入時間 (例如 0123 或 2331)", key="ti_time_input", value="")
+    time_input_raw = st.sidebar.text_input("輸入時間 (例如 0123 或 2331)", key="ti_time_input")
     
     if st.sidebar.button("確認手動登記", use_container_width=True):
         tw_now = get_tw_now()
         parsed_datetime = None
-        input_clean = time_input_raw.strip()
+        input_clean = time_input_raw.strip() if time_input_raw else ""
         
         if input_clean == "":
             st.sidebar.error("❌ 手動登記請輸入時間數字！")
@@ -281,9 +306,9 @@ if selected_option != "":
             
             update_kill_time_in_db(target_info["content"], str_kill, str_next)
             
-            # ✨ 關鍵淨空設定：手動登記成功後，將選單與時間欄同步重置回初始空白狀態
-            st.session_state["sb_boss_select"] = ""
+            # ✨ 修正點 3：手動登記成功後，同樣安全歸零
             st.session_state["ti_time_input"] = ""
+            st.session_state["sb_boss_select"] = menu_list[0]
             
             st.sidebar.success(f"🎉 補登成功！\n【{target_info['real_name']}】\n下次重生：{str_next}")
             st.rerun()
@@ -366,12 +391,10 @@ with tab2:
             st.success("已成功關閉活動！王怪重生時間恢復為正常標準週期。")
             st.rerun()
             
-    # ⚡ 核心功能：一鍵清空所有時間（加入二次確認防呆，避免手殘誤觸）
     st.markdown("---")
     st.subheader("💥 伺服器重置 / 王表大洗牌")
     st.write("此功能將會清空目前資料庫中所有王怪的『擊殺時間』與『預計出生時間』，讓全體王怪回歸到【等待中】的初始狀態。")
     
-    # 建立一個勾選方塊作為安全鎖
     confirm_clear = st.checkbox("⚠️ 我確定要清空全服所有王怪的時間記錄，且明白此操作無法復原。")
     if st.button("🔥 確定執行：一鍵清空所有王怪時間", type="primary", disabled=not confirm_clear):
         clear_all_boss_times_in_db()
